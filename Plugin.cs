@@ -276,6 +276,9 @@ public class Plugin : BaseSettingsPlugin<Settings> {
                 foreach (var line in builtModLines) linesToDraw.Add(line); 
             }
         }
+
+        if (linesToDraw.Count() < 1) return;
+
         // TOOLTIP LAYOUT VARS
         var textSize = Graphics.MeasureText("X");
         var tooltipOffset = 10;
