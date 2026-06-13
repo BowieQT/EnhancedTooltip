@@ -18,7 +18,10 @@ public sealed class UserInterface : PluginModule {
             Width = 100,
             Height = 22,
         });
-
+        ImGui.SameLine();
+        Settings.DumpTooltip_Hotkey.DrawPickerButton($"DumpTooltip Hotkey: {Settings.DumpTooltip_Hotkey.Value}");
+        ImGui.SameLine();
+        Settings.DumpMods_Hotkey.DrawPickerButton($"DumpMods Hotkey: {Settings.DumpMods_Hotkey.Value}");
 
         if (DXT.CollapsingHeader($"Tooltip Colors", ref Settings.ColorSetttingsOpen)) {
             ImGui.Indent();
@@ -63,11 +66,11 @@ public sealed class UserInterface : PluginModule {
             ImGui.SameLine();
             ImGui.Text("Low Tier Color");
 
-            DXT.Checkbox.Draw("##TierLevelColor", "Show Tier Level", ref Settings.ShowTierLevel);
-            ImGui.SameLine();
-            DXT.ColorSelect.Draw($"TierLevelColor", "Tier Level Color", ref Settings.TierLevel_Color);
-            ImGui.SameLine();
-            ImGui.Text($"Tier Level");
+            //DXT.Checkbox.Draw("##TierLevelColor", "Show Tier Level", ref Settings.ShowTierLevel);
+            //ImGui.SameLine();
+            //DXT.ColorSelect.Draw($"TierLevelColor", "Tier Level Color", ref Settings.TierLevel_Color);
+            //ImGui.SameLine();
+            //ImGui.Text($"Tier Level");
 
             ImGui.Unindent();
         }
@@ -81,7 +84,11 @@ public sealed class UserInterface : PluginModule {
             ImGui.SameLine();
             ImGui.Text("Captured Hover Item Mod Names");
 
-            ImGui.InputTextMultiline("##CaptureML", ref CapturedNames, 10000, new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 100), ImGuiInputTextFlags.ReadOnly);
+            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+
+            ImGui.InputTextMultiline("##CaptureML", ref CapturedNames, 10000, new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 105), ImGuiInputTextFlags.ReadOnly);
+
+            ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
 
             for (int i = 0; i < Settings.CustomModColors.Count; i++) { DrawCustomMod(Settings.CustomModColors[i], i); }
             if (DXT.Button.Draw("AddMod", new() { Label = "Add Mod", Width = (int)_buttonWidth })) {
@@ -94,11 +101,6 @@ public sealed class UserInterface : PluginModule {
             ImGui.Unindent();
         }
 
-
-
-
-
-
     }
 
     private void DrawCustomMod(ModCustomColorSettings modSettings, int index) {
@@ -107,7 +109,7 @@ public sealed class UserInterface : PluginModule {
 
         DXT.ColorSelect.Draw("ModColor", "Mod Text Color", ref modSettings.Color);
         ImGui.SameLine();
-        string[] tierOptions = { "Any", "T1", "T2", "T3", "T4", "T5", "T6" };
+        string[] tierOptions = { "Any", "<=T1", "<=T2", "<=T3", "<=T4", "<=T5", "<=T6" };
         DXT.Select.Draw("ModTier", ref modSettings.SelectedTier, new() { Width = 60, Tooltip = DXT.Tooltip.BasicOptions("Mod Tier threshold"), Items = tierOptions.ToList() });
         ImGui.SameLine();
         DXT.Input.Draw("ModName", ref modSettings.ModName, new() { Width = (int)(ImGui.GetContentRegionAvail().X - spacing - spacing - _buttonWidth - spacing), Tooltip = DXT.Tooltip.BasicOptions("Name of Mod to color") } );

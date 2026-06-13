@@ -19,6 +19,7 @@ using static DieselExileTools.Common.DXTC.Palettes.Material;
 using static DieselExileTools.DXT;
 using static DieselExileTools.ExileCore2.DXT;
 using static DieselExileTools.ExileCore2.DXT.Tooltip;
+using static EnhancedTooltip.TooltipParser;
 using static ExileCore2.PoEMemory.Elements.Village.CurrencyExchangePanelOrderElement;
 using SColor = System.Drawing.Color;
 using SVector2 = System.Numerics.Vector2;
@@ -28,11 +29,10 @@ namespace EnhancedTooltip;
 public class Plugin : BaseSettingsPlugin<Settings> {
     //--| Properties |-------------------------------------------------------------------------------------------------
     private UserInterface _userInterface;
-    private UserInterface UserInterface => _userInterface ??= new UserInterface(this);
+    public UserInterface UserInterface => _userInterface ??= new UserInterface(this);
 
-
-
-
+    private TooltipParser _tooltiParser;
+    public TooltipParser TooltipParser => _tooltiParser ??= new TooltipParser(this);
 
     //--| Initialise |--------------------------------------------------------------------------------------------------
     public override bool Initialise() {
@@ -73,39 +73,12 @@ public class Plugin : BaseSettingsPlugin<Settings> {
         DrawToolTip();
 
         DBug.Render();
-    }
 
+        TooltipParser.Render();        
+    }
 
     //--| Tooltip |----------------------------------------------------------------------------------------------------
 
-    //+3.74% to Critical Hit Chance
-    //Adds 33 to 63 Physical Damage
-    //Adds 79 to 123 Cold Damage
-    //2% chance to gain Onslaught on Killing Hits with this Weapon
-    //17% increased[Attack] Speed
-    //Companions have +13% to all Elemental Resistances
-    //13% increased Rarity of Items found
-    //Adds 14 to 24 Physical Damage to Attacks
-    //Adds 20 to 25 Cold damage to Attacks
-    //+26 to Intelligence
-    //+131 to maximum Life
-    //Leech 8.89% of Physical Attack Damage as Mana
-
-    private void DumpModNames() {
-        var hoverItem = GameController.Game.IngameState.UIHover?.AsObject<HoverItemIcon>();
-        if (hoverItem == null) return;
-
-        var item = hoverItem.Item;
-        if (item == null || !item.IsValid) return;
-
-        if (!item.TryGetComponent<Mods>(out var itemModComp)) return;
-
-        var sb = new System.Text.StringBuilder();
-        foreach (var mod in itemModComp.ItemMods) {
-            sb.AppendLine(mod.Name);
-        }
-        UserInterface.CapturedNames = sb.ToString().TrimEnd(); // TrimEnd removes the last extra newline
-    }
     private void DrawToolTip() {
         var hoverItem = GameController.Game.IngameState.UIHover?.AsObject<HoverItemIcon>();
         if (hoverItem == null) return;
@@ -138,40 +111,37 @@ public class Plugin : BaseSettingsPlugin<Settings> {
         }
 
         // MODS
-        if (item.TryGetComponent<Mods>(out var itemModComp)) {
-            List<ItemMod> prefixes = [];
-            List<ItemMod> suffixes = [];
-            foreach (var mod in itemModComp.ExplicitMods) {
-                if (mod.ModRecord.AffixType == ModType.Prefix) prefixes.Add(mod);
-                if (mod.ModRecord.AffixType == ModType.Suffix) suffixes.Add(mod);
-            }
-            var modDrawCount = prefixes.Count + suffixes.Count;
+        var itemMods = TooltipParser.ExtractMods(tooltip);
+        int prefixCount = itemMods.Count(m => m.Category == ModCategory.Prefix);
+        int suffixCount = itemMods.Count(m => m.Category == ModCategory.Suffix);
+        var modDrawCount = prefixCount + suffixCount;
+        bool drawnPrefixHeader = false;
+        bool drawnSuffixHeader = false;
+
+        if (modDrawCount > 0) {
             // SPACER
             if (modDrawCount > 0 && needSeperator) {
                 needSeperator = false;
                 linesToDraw.Add(new ColoredText(" "));
             }
-            // PREFIXES
-            if (prefixes.Count > 0) {
-                linesToDraw.Add(new ColoredText($"Prefixes: {prefixes.Count}", Settings.PrefixHeader_Color));
-                foreach (var mod in prefixes) {
-                    var builtModLines = BuildModLines(mod);
-                    foreach (var line in builtModLines) linesToDraw.Add(line);
-                }
-            }
-            // SUFFIXES
-            if (suffixes.Count > 0) {
-                linesToDraw.Add(new ColoredText($"Suffixes: {suffixes.Count}", Settings.SuffixHeader_Color));
-                foreach (var mod in suffixes) {
-                    var builtModLines = BuildModLines(mod);
-                    foreach (var line in builtModLines) linesToDraw.Add(line);
-                }
-            }
 
+            foreach (var mod in itemMods) {
+                if (mod.Category == ModCategory.Prefix && !drawnPrefixHeader) {
+                    linesToDraw.Add(new ColoredText($"Prefixes: {prefixCount}", Settings.PrefixHeader_Color));
+                    drawnPrefixHeader = true;
+                }
+                if (mod.Category == ModCategory.Suffix && !drawnSuffixHeader) {
+                    linesToDraw.Add(new ColoredText($"Suffixes: {suffixCount}", Settings.SuffixHeader_Color));
+                    drawnSuffixHeader = true;
+                }
+
+                if(mod.Category == ModCategory.Suffix || mod.Category == ModCategory.Prefix) {
+                    var builtModLines = BuildModLines(mod);
+                    foreach (var line in builtModLines) linesToDraw.Add(line);
+                }
+            }          
         }
-
         if (linesToDraw.Count() < 1) return;
-
         // TOOLTIP LAYOUT VARS
         var textSize = Graphics.MeasureText("X");
         var tooltipOffset = 10;
@@ -188,7 +158,82 @@ public class Plugin : BaseSettingsPlugin<Settings> {
             currentY += renderable.Height;
         }
     }
-    public (float dps, float phys, float ele, float chaos) GetWeaponDPS(Entity item) {
+
+    private List<ColoredText> BuildModLines(ModInfo modInfo) {
+        var linesList = new List<ColoredText>();
+        bool isFirstLine = true;
+        const string AlignmentPadding = "      ";
+
+        foreach (var line in modInfo.Lines) {
+            var text = "";
+            var textColor = Settings.DefaultText_Color;
+            // FORMAT TEXT
+            if (modInfo.IsVeiled) {
+                textColor = Settings.Desecrated_Color;
+                text = "Veiled Mod";
+            }
+            else {
+                text = line.Body;
+            }
+            // CUSTOM MOD COLOR 
+            foreach (var customModColor in Settings.CustomModColors) {
+                if (modInfo.TextID.Equals(customModColor.ModName, StringComparison.OrdinalIgnoreCase)) {
+                    if (customModColor.SelectedTier == 0 || modInfo.TierNum <= customModColor.SelectedTier) {
+                        textColor = customModColor.Color;
+                        break;
+                    }
+                }
+            }
+            // BUILD LINE
+            var coloredLine = new List<ColorSegment>();
+            // MOD TYPE LABEL
+            if (isFirstLine) {
+                // DESECRATED
+                if (modInfo.IsDesecrated) {
+                    coloredLine.Add(new(" D ", Settings.Desecrated_Color));
+                } // CRAFTED
+                else if (modInfo.IsCrafted) {
+                    coloredLine.Add(new(" C ", Settings.Crafted_Color));
+                }
+                else {
+                    coloredLine.Add(new("   "));
+                }
+            }
+            // TIER (Only for first line)
+            if (isFirstLine) {
+                var tierColor = modInfo.TierNum switch {
+                    1 => Settings.Tier1Color_Color,
+                    2 => Settings.Tier2Color_Color,
+                    3 => Settings.Tier3Color_Color,
+                    _ => Settings.LowTier_Color
+                };
+                coloredLine.Add(new($"T{modInfo.TierNum}".PadRight(3), tierColor));
+            }
+            else {
+                coloredLine.Add(new(AlignmentPadding));
+            }
+            // PREFIX
+            if (!string.IsNullOrEmpty(line.RollPrefix)) {
+                coloredLine.Add(new(line.RollPrefix + (line.RollPrefix.Length > 1 ? " " : ""), textColor));
+            }
+            // ROLLS
+            for (int i = 0; i < line.Rolls.Count; i++) {
+                if (i == 1) coloredLine.Add(new(" to ", textColor));
+                coloredLine.Add(new(line.Rolls[i].Current.ToString(), Settings.Roll_Color));
+            }
+            // SUFFIX
+            if (!string.IsNullOrEmpty(line.RollSuffix)) {
+                coloredLine.Add(new(line.RollSuffix, textColor));
+            }
+            // TEXT
+            coloredLine.Add(new( (line.Rolls.Count > 0 ? " " : "") + text, textColor));
+            // ADD
+            linesList.Add(new ColoredText(coloredLine));
+            isFirstLine = false;
+        }
+        return linesList;
+    }
+    private (float dps, float phys, float ele, float chaos) GetWeaponDPS(Entity item) {
         if (!item.TryGetComponent<Weapon>(out var weapon) || !item.TryGetComponent<LocalStats>(out var localStats)) {
             return (0, 0, 0, 0);
         }
@@ -321,182 +366,20 @@ public class Plugin : BaseSettingsPlugin<Settings> {
         return (totalDPS, pdps, edps, chaosdps);
     }
 
-    private List<ColoredText> BuildModLines(ItemMod itemMod) {
-        var linesList = new List<ColoredText>();
-        bool isFirstLine = true;
+    private void DumpModNames() {
+        var hoverItem = GameController.Game.IngameState.UIHover?.AsObject<HoverItemIcon>();
+        if (hoverItem == null) return;
 
-        try {
-            foreach (string modLine in itemMod.Translation.Split('\n')) {
-                // FORMAT LINE
-                var (cleanLine, isUnknown) = CleanLine(modLine);
-                var rolls = itemMod.Values;
-                var rollPrefix = "";
-                var rollSuffix = "";
-                var text = "";
-                var textColor = Settings.DefaultText_Color;
-                int modTier = GetModTier(itemMod);
+        var tooltip = hoverItem.Tooltip;
+        if (tooltip == null || !tooltip.IsVisible) return;
 
-                if (itemMod.Group == "VeiledPrefix") {
-                    textColor = Settings.Desecrated_Color;
-                    text = "Veiled Mod";
-                    rolls = [];
-                }
-                else if (isUnknown) {
-                    if (string.IsNullOrEmpty(itemMod.Name)) {
-                        text = "UNKNOWN!!!";
-                    }
-                    else {
-                        if (itemMod.ModRecord?.StatNames != null && itemMod.ModRecord.StatNames.Count() > 0 && itemMod.ModRecord.StatNames[0] != null) {
-                            if (itemMod.ModRecord.StatNames[0].Type == StatType.Percents) rollSuffix = "%";
-                        }
-                        text = Regex.Replace(itemMod.Name, @"(Local|Percent)", "", RegexOptions.IgnoreCase);
-                        text = Regex.Replace(text, @"(?<=[a-z])([A-Z])", " $1").Trim();
-                    }
-                }
-                else {
-                    if (string.IsNullOrWhiteSpace(cleanLine)) continue;
-                    var matches = Regex.Matches(cleanLine, @"\d+(?:\.\d+)?");
-                    if (matches.Count > 0) {
-                        // Prefix: Everything before the first number
-                        rollPrefix = cleanLine.Substring(0, matches[0].Index).Trim();
-                        // Text/Suffix: Everything after the last number
-                        var lastMatch = matches[matches.Count - 1];
-                        string after = cleanLine.Substring(lastMatch.Index + lastMatch.Length).Trim();
-                        // Cleans the "to" suffix logic
-                        var textMatch = Regex.Match(after, @"^(?<suffix>[%\s]*)(to\s+)?(?<text>.*)", RegexOptions.IgnoreCase);
-                        rollSuffix = textMatch.Groups["suffix"].Value.Trim();
-                        text = textMatch.Groups["text"].Value.Trim();
-                    }
-                    else
-                        text = cleanLine;
-                }
-                foreach (var customModColor in Settings.CustomModColors) {
-                    if (itemMod.Name.Equals(customModColor.ModName, StringComparison.OrdinalIgnoreCase)) {
-                        if (customModColor.SelectedTier == 0 || modTier <= customModColor.SelectedTier) {
+        var itemMods = TooltipParser.ExtractMods(tooltip);
 
-
-                            textColor = customModColor.Color;
-                            break;
-                        }
-                    }
-                }
-                // BUILD LINE
-                var coloredLine = new List<ColorSegment>();
-
-                string AlignmentPadding = "    " + (Settings.ShowTierLevel ? "   " : "");
-                // INDENT LINE
-                coloredLine.Add(new("  "));
-                // TIER (Only for first line)
-                if (isFirstLine) {
-                    var tierColor = modTier switch {
-                        1 => Settings.Tier1Color_Color,
-                        2 => Settings.Tier2Color_Color,
-                        3 => Settings.Tier3Color_Color,
-                        _ => Settings.LowTier_Color
-                    };
-                    coloredLine.Add(new($"T{modTier}".PadRight(3), tierColor));
-                    if (Settings.ShowTierLevel) {
-                        if (itemMod.Level > 0)
-                            coloredLine.Add(new($"{itemMod.Level}".PadRight(3), Settings.TierLevel_Color));
-                        else
-                            coloredLine.Add(new("   "));
-                    }
-                }
-                else {
-                    coloredLine.Add(new(AlignmentPadding));
-                }
-                // PREFIX
-                if (!string.IsNullOrEmpty(rollPrefix)) {
-                    coloredLine.Add(new(rollPrefix + (rollPrefix.Length > 1 ? " " : ""), textColor));
-                }
-                // ROLLS
-                for (int i = 0; i < rolls.Count; i++) {
-                    if (i == 1) coloredLine.Add(new(" to ", textColor));
-                    coloredLine.Add(new(itemMod.Values[i].ToString(), Settings.Roll_Color));
-                }
-                // SUFFIX & MOD TEXT
-                string suffixAndText = (string.IsNullOrEmpty(rollSuffix) ? "" : rollSuffix) + " " + text;
-                coloredLine.Add(new(suffixAndText, textColor));
-                // MOD TYPE LABEL
-                if (isFirstLine) {
-                    // DESECRATED
-                    if (itemMod.ModRecord.Domain == ModDomain.Unveiled) {
-                        coloredLine.Add(new(" Desecrated", Settings.Desecrated_Color));
-                    } // ESSENCE
-                    else if (itemMod.ModRecord.IsEssence) {
-                        coloredLine.Add(new(" Essence", Settings.Essence_Color));
-                    }
-                }
-
-                linesList.Add(new ColoredText(coloredLine));
-                isFirstLine = false;
-            }
+        var sb = new System.Text.StringBuilder();
+        foreach (var mod in itemMods) {
+            if (mod.Category == ModCategory.Prefix || mod.Category == ModCategory.Suffix) sb.AppendLine(mod.TextID);
         }
-        catch (ArgumentException ex) when (ex.Message.Contains("already been added")) {
-
-        }
-        return linesList;
+        UserInterface.CapturedNames = sb.ToString().TrimEnd(); // TrimEnd removes the last extra newline
     }
-
-
-    private (string Text, bool Unknown) CleanLine(string input) {
-        // catch unknown
-        if (input.Contains("<unknown")) return ("", true);
-
-        // Remove standard <tag> patterns
-        string text = Regex.Replace(input, @"<[^>]*>", "");
-        // Strip all curly braces and their content recursively
-        while (text.Contains("{")) {
-            int start = text.LastIndexOf('{'); // Find the innermost '{'
-            int end = text.IndexOf('}', start); // Find the matching '}'
-            if (end != -1) {
-                text = text.Remove(start, end - start + 1);
-            }
-            else {
-                // No matching '}', just remove the stray '{'
-                text = text.Remove(start, 1);
-            }
-        }
-        // Process [Tag|Name] patterns 
-        int s = text.IndexOf('[');
-        while (s != -1) {
-            int end = text.IndexOf(']', s);
-            if (end != -1) {
-                string fullBlock = text.Substring(s, (end - s) + 1);
-                string content = text.Substring(s + 1, end - s - 1);
-                var parts = content.Split('|');
-                text = text.Replace(fullBlock, parts.Length == 2 ? parts[1] : parts[0]);
-            }
-            s = text.IndexOf('[', s + 1);
-        }
-
-        return (text.Trim(), false);
-    }
-    public int GetModTier(ItemMod itemMod) {
-        var key = Tuple.Create(itemMod.ModRecord.Group, itemMod.ModRecord.AffixType);
-        var recordsByTier = GameController.Files.Mods.recordsByTier;
-
-        if (recordsByTier.TryGetValue(key, out var modFamily)) {
-            var filteredList = modFamily
-                .Where(m => m.TypeName == itemMod.ModRecord.TypeName)
-                // Group by the name
-                .GroupBy(m => m.UserFriendlyName)
-                // For each duplicate UserFriendlyName, keep the record that matches itemMod Hash, otherwise just take the first one
-                .Select(g => g.Any(m => m.Hash32 == itemMod.ModRecord.Hash32)
-                             ? g.First(m => m.Hash32 == itemMod.ModRecord.Hash32)
-                             : g.First())
-                .ToList();
-
-            int index = filteredList.FindIndex(m => m.Hash32 == itemMod.ModRecord.Hash32);
-
-            return (index >= 0) ? index + 1 : 0;
-        }
-
-        return 0;
-    }
-
-
-
-    // <unknown LocalPhysicalDamagePct:128>
 
 }

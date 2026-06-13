@@ -48,8 +48,12 @@ public sealed class Settings : ISettings {
 
     public SColor Desecrated_Color = SColor.FromArgb(56, 142, 60);
     public SColor Essence_Color = SColor.FromArgb(77, 208, 225);
+    public SColor Crafted_Color = SColor.FromArgb(128, 222, 234);
+
 
     public HotkeyNodeV2 DumpItemNames_Hotkey { get; set; } = new HotkeyNodeV2(Keys.F8);
+    public HotkeyNodeV2 DumpTooltip_Hotkey { get; set; } = new HotkeyNodeV2(Keys.F8);
+    public HotkeyNodeV2 DumpMods_Hotkey { get; set; } = new HotkeyNodeV2(Keys.F8);
 
 
 
