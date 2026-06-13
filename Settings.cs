@@ -8,11 +8,22 @@ using SVector4 = System.Numerics.Vector4;
 
 namespace EnhancedTooltip;
 
+public class ModCustomColorSettings {
+    public string ModName;
+    public Color Color;
+}
+
 public sealed class Settings : ISettings {
     public ToggleNode Enable { get; set; } = new(true);
 
     public DXTSettings DXT { get; set; } = new();
     public bool Debug = false;
+
+    public bool ShowTierLevel = true;
+
+    public bool ColorSetttingsOpen = true;
+    public bool ModColorSetttingsOpen = true;
+
 
     public SColor TooltipBG_Color = SColor.FromArgb(200, 0, 0, 0);
     public SColor TooltipBorder_Color = SColor.FromArgb(0, 0, 0); 
@@ -27,12 +38,22 @@ public sealed class Settings : ISettings {
     public SColor Tier1Color_Color = SColor.FromArgb(255, 23, 68);
     public SColor Tier2Color_Color = SColor.FromArgb(255, 145, 0);
     public SColor Tier3Color_Color = SColor.FromArgb(255, 234, 0);
+    public SColor TierLevel_Color = SColor.FromArgb(55, 71, 79);
+
 
     public SColor LowTier_Color = SColor.FromArgb(176, 190, 197);
 
     public SColor ModText_Color = SColor.FromArgb(0, 0, 0);
 
+    public SColor Desecrated_Color = SColor.FromArgb(56, 142, 60);
+    public SColor Essence_Color = SColor.FromArgb(77, 208, 225);
 
+    public HotkeyNodeV2 DumpItemNames_Hotkey { get; set; } = new HotkeyNodeV2(Keys.F8);
+
+
+
+
+    public List<ModCustomColorSettings> CustomModColors { get; set; } = new();
 
 
 
