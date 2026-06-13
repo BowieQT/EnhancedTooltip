@@ -333,6 +333,7 @@ public class Plugin : BaseSettingsPlugin<Settings> {
             var rollSuffix = "";
             var text = "";
             var textColor = Settings.DefaultText_Color;
+            int modTier = GetModTier(itemMod);
 
             if (itemMod.Group == "VeiledPrefix") {
                 textColor = Settings.Desecrated_Color;
@@ -367,17 +368,17 @@ public class Plugin : BaseSettingsPlugin<Settings> {
                 }
                 else
                     text = cleanLine;
+            }
+            foreach (var customModColor in Settings.CustomModColors) {
+                if (itemMod.Name.Equals(customModColor.ModName, StringComparison.OrdinalIgnoreCase)) {
+                    if (customModColor.SelectedTier == 0 || modTier <= customModColor.SelectedTier) {
 
-                // Custom Color
-                foreach (var customModColor in Settings.CustomModColors) {
-                    if (itemMod.Name.Contains(customModColor.ModName, StringComparison.OrdinalIgnoreCase)) {
+
                         textColor = customModColor.Color;
                         break;
                     }
                 }
-
             }
-
             // BUILD LINE
             var coloredLine = new List<ColorSegment>();
 
@@ -385,7 +386,6 @@ public class Plugin : BaseSettingsPlugin<Settings> {
             // INDENT LINE
             coloredLine.Add(new("  "));
             // TIER (Only for first line)
-            int modTier = GetModTier(itemMod);
             if (isFirstLine) {
                 var tierColor = modTier switch {
                     1 => Settings.Tier1Color_Color,
@@ -410,7 +410,7 @@ public class Plugin : BaseSettingsPlugin<Settings> {
             }
             // ROLLS
             for (int i = 0; i < rolls.Count; i++) {
-                if (i == 1) coloredLine.Add(new(" to "));
+                if (i == 1) coloredLine.Add(new(" to ", textColor));
                 coloredLine.Add(new(itemMod.Values[i].ToString(), Settings.Roll_Color));
             }
             // SUFFIX & MOD TEXT

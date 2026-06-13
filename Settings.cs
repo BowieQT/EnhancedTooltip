@@ -10,6 +10,7 @@ namespace EnhancedTooltip;
 
 public class ModCustomColorSettings {
     public string ModName;
+    public int SelectedTier;
     public Color Color;
 }
 

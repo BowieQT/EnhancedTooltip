@@ -107,7 +107,10 @@ public sealed class UserInterface : PluginModule {
 
         DXT.ColorSelect.Draw("ModColor", "Mod Text Color", ref modSettings.Color);
         ImGui.SameLine();
-        DXT.Input.Draw("ModName", ref modSettings.ModName, new() { Width = (int)(ImGui.GetContentRegionAvail().X - spacing - _buttonWidth - spacing), Tooltip = DXT.Tooltip.BasicOptions("Name of Mod to color") } );
+        string[] tierOptions = { "Any", "T1", "T2", "T3", "T4", "T5", "T6" };
+        DXT.Select.Draw("ModTier", ref modSettings.SelectedTier, new() { Width = 60, Tooltip = DXT.Tooltip.BasicOptions("Mod Tier threshold"), Items = tierOptions.ToList() });
+        ImGui.SameLine();
+        DXT.Input.Draw("ModName", ref modSettings.ModName, new() { Width = (int)(ImGui.GetContentRegionAvail().X - spacing - spacing - _buttonWidth - spacing), Tooltip = DXT.Tooltip.BasicOptions("Name of Mod to color") } );
         ImGui.SameLine();
         if (DXT.Button.Draw("RemoveMod", new() { Label = "Remove", Width = (int)_buttonWidth, Color = DXTC.Colors.ControlRed } )) {
             Settings.CustomModColors.RemoveAt(index);
