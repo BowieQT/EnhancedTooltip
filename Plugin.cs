@@ -325,110 +325,115 @@ public class Plugin : BaseSettingsPlugin<Settings> {
         var linesList = new List<ColoredText>();
         bool isFirstLine = true;
 
-        foreach (string modLine in itemMod.Translation.Split('\n')) {
-            // FORMAT LINE
-            var (cleanLine, isUnknown) = CleanLine(modLine);
-            var rolls = itemMod.Values;
-            var rollPrefix = "";
-            var rollSuffix = "";
-            var text = "";
-            var textColor = Settings.DefaultText_Color;
-            int modTier = GetModTier(itemMod);
+        try {
+            foreach (string modLine in itemMod.Translation.Split('\n')) {
+                // FORMAT LINE
+                var (cleanLine, isUnknown) = CleanLine(modLine);
+                var rolls = itemMod.Values;
+                var rollPrefix = "";
+                var rollSuffix = "";
+                var text = "";
+                var textColor = Settings.DefaultText_Color;
+                int modTier = GetModTier(itemMod);
 
-            if (itemMod.Group == "VeiledPrefix") {
-                textColor = Settings.Desecrated_Color;
-                text = "Veiled Mod";
-                rolls = [];
-            }
-            else if(isUnknown) {
-                if (string.IsNullOrEmpty(itemMod.Name)) {
-                    text = "UNKNOWN!!!";
+                if (itemMod.Group == "VeiledPrefix") {
+                    textColor = Settings.Desecrated_Color;
+                    text = "Veiled Mod";
+                    rolls = [];
+                }
+                else if (isUnknown) {
+                    if (string.IsNullOrEmpty(itemMod.Name)) {
+                        text = "UNKNOWN!!!";
+                    }
+                    else {
+                        if (itemMod.ModRecord?.StatNames != null && itemMod.ModRecord.StatNames.Count() > 0 && itemMod.ModRecord.StatNames[0] != null) {
+                            if (itemMod.ModRecord.StatNames[0].Type == StatType.Percents) rollSuffix = "%";
+                        }
+                        text = Regex.Replace(itemMod.Name, @"(Local|Percent)", "", RegexOptions.IgnoreCase);
+                        text = Regex.Replace(text, @"(?<=[a-z])([A-Z])", " $1").Trim();
+                    }
                 }
                 else {
-                    if (itemMod.ModRecord?.StatNames != null && itemMod.ModRecord.StatNames.Count() > 0 && itemMod.ModRecord.StatNames[0] != null) {
-                        if (itemMod.ModRecord.StatNames[0].Type == StatType.Percents) rollSuffix = "%";
+                    if (string.IsNullOrWhiteSpace(cleanLine)) continue;
+                    var matches = Regex.Matches(cleanLine, @"\d+(?:\.\d+)?");
+                    if (matches.Count > 0) {
+                        // Prefix: Everything before the first number
+                        rollPrefix = cleanLine.Substring(0, matches[0].Index).Trim();
+                        // Text/Suffix: Everything after the last number
+                        var lastMatch = matches[matches.Count - 1];
+                        string after = cleanLine.Substring(lastMatch.Index + lastMatch.Length).Trim();
+                        // Cleans the "to" suffix logic
+                        var textMatch = Regex.Match(after, @"^(?<suffix>[%\s]*)(to\s+)?(?<text>.*)", RegexOptions.IgnoreCase);
+                        rollSuffix = textMatch.Groups["suffix"].Value.Trim();
+                        text = textMatch.Groups["text"].Value.Trim();
                     }
-                    text = Regex.Replace(itemMod.Name, @"(Local|Percent)", "", RegexOptions.IgnoreCase);
-                    text = Regex.Replace(text, @"(?<=[a-z])([A-Z])", " $1").Trim();
-                }
-            }
-            else {
-                if (string.IsNullOrWhiteSpace(cleanLine)) continue;
-                var matches = Regex.Matches(cleanLine, @"\d+(?:\.\d+)?");
-                if (matches.Count > 0) {
-                    // Prefix: Everything before the first number
-                    rollPrefix = cleanLine.Substring(0, matches[0].Index).Trim();
-                    // Text/Suffix: Everything after the last number
-                    var lastMatch = matches[matches.Count - 1];
-                    string after = cleanLine.Substring(lastMatch.Index + lastMatch.Length).Trim();
-                    // Cleans the "to" suffix logic
-                    var textMatch = Regex.Match(after, @"^(?<suffix>[%\s]*)(to\s+)?(?<text>.*)", RegexOptions.IgnoreCase);
-                    rollSuffix = textMatch.Groups["suffix"].Value.Trim();
-                    text = textMatch.Groups["text"].Value.Trim();
-                }
-                else
-                    text = cleanLine;
-            }
-            foreach (var customModColor in Settings.CustomModColors) {
-                if (itemMod.Name.Equals(customModColor.ModName, StringComparison.OrdinalIgnoreCase)) {
-                    if (customModColor.SelectedTier == 0 || modTier <= customModColor.SelectedTier) {
-
-
-                        textColor = customModColor.Color;
-                        break;
-                    }
-                }
-            }
-            // BUILD LINE
-            var coloredLine = new List<ColorSegment>();
-
-            string AlignmentPadding = "    " + (Settings.ShowTierLevel ? "   " : "");
-            // INDENT LINE
-            coloredLine.Add(new("  "));
-            // TIER (Only for first line)
-            if (isFirstLine) {
-                var tierColor = modTier switch {
-                    1 => Settings.Tier1Color_Color,
-                    2 => Settings.Tier2Color_Color,
-                    3 => Settings.Tier3Color_Color,
-                    _ => Settings.LowTier_Color
-                };
-                coloredLine.Add(new($"T{modTier}".PadRight(3), tierColor));
-                if (Settings.ShowTierLevel) {
-                    if (itemMod.Level > 0)
-                        coloredLine.Add(new($"{itemMod.Level}".PadRight(3), Settings.TierLevel_Color));
                     else
-                        coloredLine.Add(new("   "));
+                        text = cleanLine;
                 }
-            }
-            else {
-                coloredLine.Add(new(AlignmentPadding));
-            }
-            // PREFIX
-            if (!string.IsNullOrEmpty(rollPrefix)) {
-                coloredLine.Add(new(rollPrefix + (rollPrefix.Length > 1 ? " " : ""), textColor));
-            }
-            // ROLLS
-            for (int i = 0; i < rolls.Count; i++) {
-                if (i == 1) coloredLine.Add(new(" to ", textColor));
-                coloredLine.Add(new(itemMod.Values[i].ToString(), Settings.Roll_Color));
-            }
-            // SUFFIX & MOD TEXT
-            string suffixAndText = (string.IsNullOrEmpty(rollSuffix) ? "" : rollSuffix) + " " + text;
-            coloredLine.Add(new(suffixAndText, textColor));
-            // MOD TYPE LABEL
-            if (isFirstLine) {
-                // DESECRATED
-                if(itemMod.ModRecord.Domain == ModDomain.Unveiled) {
-                    coloredLine.Add(new(" Desecrated", Settings.Desecrated_Color));
-                } // ESSENCE
-                else if(itemMod.ModRecord.IsEssence) {
-                    coloredLine.Add(new(" Essence", Settings.Essence_Color));
-                }             
-            }
+                foreach (var customModColor in Settings.CustomModColors) {
+                    if (itemMod.Name.Equals(customModColor.ModName, StringComparison.OrdinalIgnoreCase)) {
+                        if (customModColor.SelectedTier == 0 || modTier <= customModColor.SelectedTier) {
 
-            linesList.Add(new ColoredText(coloredLine));
-            isFirstLine = false;
+
+                            textColor = customModColor.Color;
+                            break;
+                        }
+                    }
+                }
+                // BUILD LINE
+                var coloredLine = new List<ColorSegment>();
+
+                string AlignmentPadding = "    " + (Settings.ShowTierLevel ? "   " : "");
+                // INDENT LINE
+                coloredLine.Add(new("  "));
+                // TIER (Only for first line)
+                if (isFirstLine) {
+                    var tierColor = modTier switch {
+                        1 => Settings.Tier1Color_Color,
+                        2 => Settings.Tier2Color_Color,
+                        3 => Settings.Tier3Color_Color,
+                        _ => Settings.LowTier_Color
+                    };
+                    coloredLine.Add(new($"T{modTier}".PadRight(3), tierColor));
+                    if (Settings.ShowTierLevel) {
+                        if (itemMod.Level > 0)
+                            coloredLine.Add(new($"{itemMod.Level}".PadRight(3), Settings.TierLevel_Color));
+                        else
+                            coloredLine.Add(new("   "));
+                    }
+                }
+                else {
+                    coloredLine.Add(new(AlignmentPadding));
+                }
+                // PREFIX
+                if (!string.IsNullOrEmpty(rollPrefix)) {
+                    coloredLine.Add(new(rollPrefix + (rollPrefix.Length > 1 ? " " : ""), textColor));
+                }
+                // ROLLS
+                for (int i = 0; i < rolls.Count; i++) {
+                    if (i == 1) coloredLine.Add(new(" to ", textColor));
+                    coloredLine.Add(new(itemMod.Values[i].ToString(), Settings.Roll_Color));
+                }
+                // SUFFIX & MOD TEXT
+                string suffixAndText = (string.IsNullOrEmpty(rollSuffix) ? "" : rollSuffix) + " " + text;
+                coloredLine.Add(new(suffixAndText, textColor));
+                // MOD TYPE LABEL
+                if (isFirstLine) {
+                    // DESECRATED
+                    if (itemMod.ModRecord.Domain == ModDomain.Unveiled) {
+                        coloredLine.Add(new(" Desecrated", Settings.Desecrated_Color));
+                    } // ESSENCE
+                    else if (itemMod.ModRecord.IsEssence) {
+                        coloredLine.Add(new(" Essence", Settings.Essence_Color));
+                    }
+                }
+
+                linesList.Add(new ColoredText(coloredLine));
+                isFirstLine = false;
+            }
+        }
+        catch (ArgumentException ex) when (ex.Message.Contains("already been added")) {
+
         }
         return linesList;
     }
